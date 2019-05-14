@@ -67,10 +67,16 @@ class Iterator
                 $this->seekPoint += strlen($this->buffer);
             }
         } while ($ret < 1);
+
+        $this->updateSeekPosition();
+        $this->currentMatchIndex = 0;
+    }
+
+    protected function updateSeekPosition()
+    {
         $lastMatch = $this->currentMatches[count($this->currentMatches) - 1];
         $this->seekPoint += $lastMatch[0][1] + strlen($lastMatch[0][0]);
         fseek($this->handler, $this->seekPoint);
-        $this->currentMatchIndex = 0;
     }
 
     public function current()
