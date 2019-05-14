@@ -4,13 +4,14 @@ namespace Antevenio\StreamRegexIterator;
 
 use Exception;
 
-class Iterator
+class Iterator implements \Iterator
 {
     const DEFAULT_BUFFER_SIZE = 1024 * 1024;
 
     protected $handler;
     protected $buffer;
     protected $bufferSize;
+    protected $currentBufferSize;
     protected $regularExpression;
     protected $currentMatches;
     protected $currentMatchIndex;
@@ -36,6 +37,7 @@ class Iterator
         $this->streamEnded = false;
         $this->globalMatchIndex = 0;
         $this->seekPoint = 0;
+        $this->currentBufferSize = $this->bufferSize;
         $this->readNextBlock();
     }
 
@@ -45,12 +47,13 @@ class Iterator
     protected function readNextBlock()
     {
         do {
+            fseek($this->handler, $this->seekPoint);
             if (feof($this->handler)) {
                 $this->streamEnded = true;
 
                 return;
             }
-            $this->buffer = fread($this->handler, $this->bufferSize);
+            $this->buffer = fread($this->handler, $this->currentBufferSize);
             $ret = preg_match_all(
                 $this->regularExpression,
                 $this->buffer,
@@ -64,12 +67,33 @@ class Iterator
                 );
             }
             if ($ret < 1) {
-                $this->seekPoint += strlen($this->buffer);
+                $this->handleNoResultsFoundInChunk();
+            } else {
+                $this->resetCurrentBufferSize();
             }
         } while ($ret < 1);
 
         $this->updateSeekPosition();
         $this->currentMatchIndex = 0;
+    }
+
+    protected function resetCurrentBufferSize()
+    {
+        $this->currentBufferSize = $this->bufferSize;
+    }
+
+    protected function doubleCurrentBufferSize()
+    {
+        $this->currentBufferSize += $this->bufferSize;
+    }
+
+    protected function handleNoResultsFoundInChunk()
+    {
+        if ($this->currentBufferSize == $this->bufferSize) {
+            $this->doubleCurrentBufferSize();
+        } else {
+            $this->seekPoint += $this->bufferSize;
+        }
     }
 
     protected function updateSeekPosition()
