@@ -5,13 +5,13 @@ Find regular expresion matches on seekable text streams and return them inside a
 This iterator comes as a solution to having to run complex multi line regular expressions 
 on big files without exhausting memory.
 
-The iterator will read chunks of data from the stream and try the regular expression 
-using a preg_match_all() on each one of them.
+The iterator will read chunks of data from the stream and run ```preg_match_all()``` 
+on each one of them.
 
 The iterator will read chunks of data in a way that it ensures no possible matches are lost 
 through chunks, (stream being cut in the middle of a possible match).
 
-The iterator will return matches as ``preg_match_all()`` would do when using the 
+The iterator will return matches as ```preg_match_all()``` would do when using the 
 ```PREG_SET_ORDER | PREG_OFFSET_CAPTURE``` flags.
 
 ## Limitations
