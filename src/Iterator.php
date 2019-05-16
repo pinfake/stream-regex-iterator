@@ -18,6 +18,7 @@ class Iterator implements \Iterator
     protected $globalMatchIndex;
     protected $streamEnded;
     protected $seekPoint;
+    protected $streamSize;
 
     public function __construct(
         $handler,
@@ -38,6 +39,9 @@ class Iterator implements \Iterator
         $this->globalMatchIndex = 0;
         $this->seekPoint = 0;
         $this->currentBufferSize = $this->bufferSize;
+        fseek($this->handler, 0, SEEK_END);
+        $this->streamSize = ftell($this->handler);
+        rewind($this->handler);
         $this->readNextBlock();
     }
 
@@ -48,12 +52,12 @@ class Iterator implements \Iterator
     {
         do {
             fseek($this->handler, $this->seekPoint);
-            if (feof($this->handler)) {
+            $this->buffer = fread($this->handler, $this->currentBufferSize);
+            $readSize = strlen($this->buffer);
+            if ($readSize < 1) {
                 $this->streamEnded = true;
-
                 return;
             }
-            $this->buffer = fread($this->handler, $this->currentBufferSize);
             $ret = preg_match_all(
                 $this->regularExpression,
                 $this->buffer,
@@ -65,6 +69,10 @@ class Iterator implements \Iterator
                     "RegExp Error!: " .
                     array_flip(get_defined_constants(true)['pcre'])[preg_last_error()]
                 );
+            }
+            if ($readSize < $this->bufferSize) {
+                $this->streamEnded = true;
+                break;
             }
             if ($ret < 1) {
                 $this->handleNoResultsFoundInChunk();
@@ -122,7 +130,9 @@ class Iterator implements \Iterator
 
     public function valid()
     {
-        return !$this->streamEnded;
+        return
+            $this->currentMatchIndex < count($this->currentMatches) ||
+            !$this->streamEnded;
     }
 
     public function key()
