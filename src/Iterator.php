@@ -8,7 +8,7 @@ class Iterator implements \Iterator
 {
     const DEFAULT_BUFFER_SIZE = 1024 * 1024;
 
-    protected $handler;
+    protected $handle;
     protected $buffer;
     protected $bufferSize;
     protected $currentBufferSize;
@@ -16,16 +16,17 @@ class Iterator implements \Iterator
     protected $currentMatches;
     protected $currentMatchIndex;
     protected $globalMatchIndex;
-    protected $streamEnded;
+    protected $streamFinished;
     protected $seekPoint;
-    protected $streamSize;
+    protected $pregMatchReturnValue;
+    protected $readBufferSize;
 
     public function __construct(
-        $handler,
+        $handle,
         $regularExpression,
         $bufferSize = self::DEFAULT_BUFFER_SIZE
     ) {
-        $this->handler = $handler;
+        $this->handle = $handle;
         $this->regularExpression = $regularExpression;
         $this->bufferSize = $bufferSize;
     }
@@ -35,80 +36,134 @@ class Iterator implements \Iterator
      */
     public function rewind()
     {
-        $this->streamEnded = false;
+        $this->streamFinished = false;
         $this->globalMatchIndex = 0;
+        $this->currentMatchIndex = 0;
         $this->seekPoint = 0;
         $this->currentBufferSize = $this->bufferSize;
-        fseek($this->handler, 0, SEEK_END);
-        $this->streamSize = ftell($this->handler);
-        rewind($this->handler);
-        $this->readNextBlock();
+        $this->readNextChunk();
     }
 
     /**
      * @throws Exception
      */
-    protected function readNextBlock()
+    protected function readNextChunk()
     {
         do {
-            fseek($this->handler, $this->seekPoint);
-            $this->buffer = fread($this->handler, $this->currentBufferSize);
-            $readSize = strlen($this->buffer);
-            if ($readSize < 1) {
-                $this->streamEnded = true;
+            $this->readIntoBuffer();
+
+            if ($this->readBufferIsEmpty()) {
+                $this->setStreamFinished();
                 return;
             }
-            $ret = preg_match_all(
-                $this->regularExpression,
-                $this->buffer,
-                $this->currentMatches,
-                PREG_SET_ORDER | PREG_OFFSET_CAPTURE
-            );
-            if ($ret === false) {
-                throw new Exception(
-                    "RegExp Error!: " .
-                    array_flip(get_defined_constants(true)['pcre'])[preg_last_error()]
-                );
-            }
-            if ($readSize < $this->bufferSize) {
-                $this->streamEnded = true;
-                break;
-            }
-            if ($ret < 1) {
-                $this->handleNoResultsFoundInChunk();
-            } else {
-                $this->resetCurrentBufferSize();
-            }
-        } while ($ret < 1);
 
-        $this->updateSeekPosition();
-        $this->currentMatchIndex = 0;
+            $this->findMatches();
+
+            if (!$this->isLastChunk()) {
+                $this->prepareForNextBufferRead();
+            }
+        } while ($this->noMatchesFound() /*&& !$this->streamIsFinished()*/);
     }
 
-    protected function resetCurrentBufferSize()
+    protected function readIntoBuffer()
+    {
+        $this->buffer = fread($this->handle, $this->currentBufferSize);
+        $this->readBufferSize = strlen($this->buffer);
+    }
+
+    protected function readBufferIsEmpty()
+    {
+        return $this->readBufferSize < 1;
+    }
+
+    protected function setStreamFinished()
+    {
+        $this->streamFinished = true;
+    }
+
+    protected function findMatches()
+    {
+        $this->pregMatchReturnValue = preg_match_all(
+            $this->regularExpression,
+            $this->buffer,
+            $this->currentMatches,
+            PREG_SET_ORDER | PREG_OFFSET_CAPTURE
+        );
+
+        if ($this->pregMatchReturnValue === false) {
+            throw new Exception(
+                "RegExp Error!: " .
+                array_flip(get_defined_constants(true)['pcre'])[preg_last_error()]
+            );
+        }
+    }
+
+    protected function isLastChunk()
+    {
+        return !$this->readBufferIsFull();
+    }
+
+    protected function readBufferIsFull()
+    {
+        return $this->readBufferSize == $this->bufferSize;
+    }
+
+    protected function prepareForNextBufferRead()
+    {
+        if ($this->noMatchesFound()) {
+            if ($this->isSingleBufferSize()) {
+                $this->rewindToLastChunk();
+                $this->setDoubleBufferSize();
+            } else {
+                $this->seekForward();
+            }
+        } else {
+            $this->setSingleBufferSize();
+            $this->seekAfterLastMatch();
+        }
+    }
+
+    protected function noMatchesFound()
+    {
+        return $this->pregMatchReturnValue < 1;
+    }
+
+    protected function isSingleBufferSize()
+    {
+        return $this->currentBufferSize == $this->bufferSize;
+    }
+
+    protected function setDoubleBufferSize()
+    {
+        $this->currentBufferSize = $this->bufferSize * 2;
+    }
+
+    protected function seekForward()
+    {
+        $this->seekPoint += $this->bufferSize;
+        fseek($this->handle, $this->seekPoint);
+    }
+
+    protected function setSingleBufferSize()
     {
         $this->currentBufferSize = $this->bufferSize;
     }
 
-    protected function doubleCurrentBufferSize()
+    protected function rewindToLastChunk()
     {
-        $this->currentBufferSize += $this->bufferSize;
+        fseek($this->handle, $this->seekPoint);
     }
 
-    protected function handleNoResultsFoundInChunk()
+    protected function seekAfterLastMatch()
     {
-        if ($this->currentBufferSize == $this->bufferSize) {
-            $this->doubleCurrentBufferSize();
-        } else {
-            $this->seekPoint += $this->bufferSize;
-        }
+        $this->seekPoint += $this->getAfterLastMatchPosition();
+        fseek($this->handle, $this->seekPoint);
     }
 
-    protected function updateSeekPosition()
+    protected function getAfterLastMatchPosition()
     {
         $lastMatch = $this->currentMatches[count($this->currentMatches) - 1];
-        $this->seekPoint += $lastMatch[0][1] + strlen($lastMatch[0][0]);
-        fseek($this->handler, $this->seekPoint);
+        return $lastMatch[0][1] + strlen($lastMatch[0][0]);
     }
 
     public function current()
@@ -123,16 +178,25 @@ class Iterator implements \Iterator
     {
         $this->currentMatchIndex++;
         $this->globalMatchIndex++;
-        if ($this->currentMatchIndex == count($this->currentMatches)) {
-            $this->readNextBlock();
+        if ($this->needToReadNextChunk()) {
+            $this->currentMatchIndex = 0;
+            $this->readNextChunk();
         }
+    }
+
+    protected function needToReadNextChunk()
+    {
+        return $this->currentMatchIndex == count($this->currentMatches);
     }
 
     public function valid()
     {
-        return
-            $this->currentMatchIndex < count($this->currentMatches) ||
-            !$this->streamEnded;
+        return !$this->streamIsFinished();
+    }
+
+    protected function streamIsFinished()
+    {
+        return $this->streamFinished;
     }
 
     public function key()
