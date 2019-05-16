@@ -62,7 +62,7 @@ class Iterator implements \Iterator
             if (!$this->isLastChunk()) {
                 $this->prepareForNextBufferRead();
             }
-        } while ($this->noMatchesFound() /*&& !$this->streamIsFinished()*/);
+        } while ($this->noMatchesFound());
     }
 
     protected function readIntoBuffer()
