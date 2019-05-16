@@ -1,5 +1,5 @@
 # stream-regex-iterator
-Find regular expresion matches on text streams and return them as an iterator.
+Find regular expresion matches on seekable text streams and return them as an iterator.
 
 ## Description
 This iterator comes as a solution to having to run complex multi line regular expressions 
@@ -11,12 +11,16 @@ using a preg_match_all() on each one of them.
 The iterator will read chunks of data in a way that it ensures no possible matches are lost 
 through chunks, (stream being cut in the middle of a possible match).
 
-The specified buffer size must be able to store the longest possible full match of the regexp.
-
-The iterator will compsume approximately twice the specified buffer size memory.
-
 The iterator will return matches as ``preg_match_all()`` would do when using the 
 ```PREG_SET_ORDER | PREG_OFFSET_CAPTURE``` flags.
+
+## Limitations
+The specified stream must be fully seekable (back and forward).
+
+The specified buffer size must be able to store the longest possible full match of the regexp.
+
+The iterator will require approximately twice the specified buffer size memory.
+
 
 ## Requirements
 The following versions of PHP are supported.
