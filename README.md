@@ -1,9 +1,7 @@
 # stream-regex-iterator
-
 Find regular expresion matches on text streams and return them as an iterator.
 
 ## Description
-
 This iterator comes as a solution to having to run complex multi line regular expressions 
 on big files without exhausting memory.
 
@@ -16,6 +14,9 @@ through chunks, (stream being cut in the middle of a possible match).
 The specified buffer size must be able to store the longest possible full match of the regexp.
 
 The iterator will compsume approximately twice the specified buffer size memory.
+
+The iterator will return matches as ``preg_match_all()`` would do when using the 
+```PREG_SET_ORDER | PREG_OFFSET_CAPTURE``` flags.
 
 ## Requirements
 The following versions of PHP are supported.
@@ -30,4 +31,35 @@ The following versions of PHP are supported.
 ```
 composer require antevenio/stream-regex-iterator
 ```
- 
+
+## Usage
+```php
+$inputString = "line1\nline2\nline3\nline4\nline5\nstart\nline6\nline7\nend";
+
+$stream = fopen("data://text/plain," . $inputString, "r");
+
+$matches = new Antevenio\StreamRegexIterator\Iterator(
+    "/^start.*?end$/sm",
+    $stream,
+    32
+);
+
+foreach ($matches as $match) {
+    print_r($match);
+}
+```
+Would output:
+```
+Array
+(
+    [0] => Array
+        (
+            [0] => start
+line6
+line7
+end
+            [1] => 30
+        )
+
+)
+```
