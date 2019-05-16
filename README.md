@@ -1,5 +1,5 @@
 # stream-regex-iterator
-Find regular expresion matches on seekable text streams and return them as an iterator.
+Find regular expresion matches on seekable text streams and return them inside an iterator.
 
 ## Description
 This iterator comes as a solution to having to run complex multi line regular expressions 
