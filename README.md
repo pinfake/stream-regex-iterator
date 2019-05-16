@@ -9,7 +9,7 @@ The iterator will read chunks of data from the stream and run ```preg_match_all(
 on each one of them.
 
 The iterator will read chunks of data in a way that it ensures no possible matches are lost 
-through chunks, (possible matches existing amidst chunk split points).
+through chunks, i.e. possible matches existing amidst chunk split points.
 
 The iterator will return matches as ```preg_match_all()``` would do when using the 
 ```PREG_SET_ORDER | PREG_OFFSET_CAPTURE``` flags.
